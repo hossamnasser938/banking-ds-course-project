@@ -1,0 +1,16 @@
+{
+  "name": "distributed-banking",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "services/authentication",
+    "services/banking",
+    "services/observability",
+    "services/ui"
+  ],
+  "scripts": {
+    "lint": "npm run lint -w services/authentication && npm run lint -w services/banking && npm run lint -w services/observability && npm run lint -w services/ui",
+    "format": "npm run format -w services/authentication && npm run format -w services/banking && npm run format -w services/observability && npm run format -w services/ui",
+    "test": "npm run test -w services/authentication && npm run test -w services/banking && npm run test -w services/observability && npm run test -w services/ui"
+  }
+}

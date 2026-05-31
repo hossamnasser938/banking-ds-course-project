@@ -1,0 +1,14 @@
+name: contracts
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+
+jobs:
+  validate-openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate OpenAPI exists
+        run: test -f specs/001-distributed-banking-system/contracts/banking-api.openapi.yaml

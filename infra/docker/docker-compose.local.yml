@@ -1,0 +1,84 @@
+version: "3.9"
+services:
+  edge-gateway:
+    image: nginx:1.27
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/edge-gateway.local.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - authentication-service
+      - banking-service
+      - observability-service
+
+  authentication-service:
+    image: node:20
+    working_dir: /workspace/services/authentication
+    command: sh -c "npm install && npm run start:dev"
+    environment:
+      PORT: 8080
+      ZONE: local-zone-auth
+      NODE_ID: authentication-service-local-1
+    volumes:
+      - ../../:/workspace
+    deploy:
+      replicas: 1
+
+  banking-service:
+    image: node:20
+    working_dir: /workspace/services/banking
+    command: sh -c "npm install && npm run start:dev"
+    ports:
+      - "8082:8080"
+    environment:
+      PORT: 8080
+      ZONE: local-zone-banking
+      NODE_ID: banking-service-local-1
+    volumes:
+      - ../../:/workspace
+    depends_on:
+      - postgres-primary
+    deploy:
+      replicas: 1
+
+  observability-service:
+    image: node:20
+    working_dir: /workspace/services/observability
+    command: sh -c "npm install && npm run start:dev"
+    ports:
+      - "8083:8080"
+    environment:
+      PORT: 8080
+      ZONE: local-zone-observability
+      NODE_ID: observability-service-local-1
+    volumes:
+      - ../../:/workspace
+    deploy:
+      replicas: 1
+
+  ui:
+    image: node:20
+    working_dir: /workspace/services/ui
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    env_file:
+      - ../../.env
+    volumes:
+      - ../../:/workspace
+    deploy:
+      replicas: 1
+
+  postgres-primary:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: banking
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_primary_data:
