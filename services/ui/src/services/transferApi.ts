@@ -4,13 +4,12 @@ export type TransferRecipient = {
   userId: string;
   username: string;
   email: string;
-  accountId: string;
 };
 
 export function createTransfer(
   token: string,
   idempotencyKey: string,
-  payload: { destinationAccountId: string; amount: number; note?: string }
+  payload: { destinationUserId: string; amount: number; note?: string }
 ) {
   return apiRequest("/transfers", {
     method: "POST",

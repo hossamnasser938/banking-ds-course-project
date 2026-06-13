@@ -17,6 +17,10 @@ type ObservedNode = {
 
 @Injectable()
 export class NodeHealthRepository {
+  private readonly probeTimeoutMs = Number(process.env.OBS_NODE_HEALTH_TIMEOUT_MS ?? 1200);
+  private readonly probeMaxRetries = Number(process.env.OBS_NODE_HEALTH_MAX_RETRIES ?? 1);
+  private readonly retryBackoffMs = Number(process.env.OBS_NODE_HEALTH_RETRY_BACKOFF_MS ?? 200);
+
   async listNodes(): Promise<NodeHealth[]> {
     const now = new Date().toISOString();
     const nodes: NodeHealth[] = [
@@ -63,13 +67,44 @@ export class NodeHealthRepository {
   }
 
   private async readNodeStatus(url: string): Promise<NodeHealth["status"]> {
-    try {
-      const response = await fetch(`${url.replace(/\/$/, "")}/health`, {
-        method: "GET"
-      });
-      return response.ok ? "HEALTHY" : "UNHEALTHY";
-    } catch {
-      return "UNKNOWN";
+    const healthUrl = `${url.replace(/\/$/, "")}/health`;
+
+    for (let attempt = 0; attempt <= this.probeMaxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.probeTimeoutMs);
+      try {
+        const response = await fetch(healthUrl, {
+          method: "GET",
+          signal: controller.signal
+        });
+        if (!response.ok) {
+          if (this.shouldRetryStatus(response.status) && attempt < this.probeMaxRetries) {
+            await this.delay(this.retryBackoffMs * (attempt + 1));
+            continue;
+          }
+          return "UNHEALTHY";
+        }
+
+        const payload = (await response.json()) as { status?: string };
+        return payload.status === "HEALTHY" ? "HEALTHY" : "UNHEALTHY";
+      } catch {
+        if (attempt === this.probeMaxRetries) {
+          return "UNKNOWN";
+        }
+        await this.delay(this.retryBackoffMs * (attempt + 1));
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
+
+    return "UNKNOWN";
+  }
+
+  private shouldRetryStatus(status: number): boolean {
+    return status === 408 || status === 429 || status >= 500;
+  }
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

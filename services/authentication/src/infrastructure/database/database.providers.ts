@@ -10,12 +10,34 @@ export type DatabaseClient = {
 const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS users (
     user_id UUID PRIMARY KEY,
-    username VARCHAR(64) UNIQUE NOT NULL,
+    username VARCHAR(64) UNIQUE NOT NULL CHECK (char_length(trim(username)) > 0),
     email VARCHAR(320) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    role VARCHAR(16) NOT NULL,
+    role VARCHAR(16) NOT NULL CHECK (role IN ('user', 'admin')),
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
-  );`
+  );`,
+  `DO $$
+   BEGIN
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_constraint WHERE conname = 'users_username_non_empty'
+     ) THEN
+       ALTER TABLE users
+       ADD CONSTRAINT users_username_non_empty CHECK (char_length(trim(username)) > 0);
+     END IF;
+   END
+   $$;`,
+  `DO $$
+   BEGIN
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_constraint WHERE conname = 'users_role_valid'
+     ) THEN
+       ALTER TABLE users
+       ADD CONSTRAINT users_role_valid CHECK (role IN ('user', 'admin'));
+     END IF;
+   END
+   $$;`,
+  `CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);`,
+  `CREATE INDEX IF NOT EXISTS idx_users_created_at ON users (created_at DESC);`
 ];
 
 async function createDatabaseClient(): Promise<DatabaseClient> {
@@ -27,8 +49,25 @@ async function createDatabaseClient(): Promise<DatabaseClient> {
     database: process.env.DB_NAME ?? "banking"
   });
 
+  pool.on("error", () => {
+    // Prevent process crash when DB connections are terminated during outages.
+  });
+
   for (const statement of schemaStatements) {
-    await pool.query(statement);
+    try {
+      await pool.query(statement);
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        ["42P07", "42710", "23505"].includes((error as { code?: string }).code ?? "")
+      ) {
+        continue;
+      }
+      // Keep auth service bootable even if DB is temporarily unavailable.
+      break;
+    }
   }
 
   return {

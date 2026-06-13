@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, ConflictException } from "@nestjs/common";
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  NotFoundException
+} from "@nestjs/common";
 import * as crypto from "node:crypto";
 import { IdentityRepository } from "../infrastructure/identity.repository";
 import { LoginDto } from "../api/dto/login.dto";
@@ -102,7 +107,18 @@ export class AuthService {
     role: "user" | "admin";
   }> {
     const parsed = this.parseToken(token);
-    const user = await this.identityRepository.findByUserId(parsed.sub);
+    let user;
+    try {
+      user = await this.identityRepository.findByUserId(parsed.sub);
+    } catch {
+      // Keep internal auth verification available during temporary DB outages.
+      return {
+        userId: parsed.sub,
+        username: "unavailable",
+        email: "unavailable",
+        role: parsed.role
+      };
+    }
     if (!user) {
       throw new UnauthorizedException("Unknown user");
     }
@@ -123,6 +139,19 @@ export class AuthService {
         email: user.email,
         role: user.role
       }))
+    };
+  }
+
+  async getUserById(userId: string) {
+    const user = await this.identityRepository.findByUserId(userId);
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+    return {
+      userId: user.userId,
+      username: user.username,
+      email: user.email,
+      role: user.role
     };
   }
 

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, UnauthorizedException, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  UnauthorizedException,
+  UseGuards
+} from "@nestjs/common";
 import { AuthService } from "../application/auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
@@ -31,5 +39,11 @@ export class AuthController {
   @UseGuards(InternalApiGuard)
   async listUsers() {
     return this.authService.listUsers();
+  }
+
+  @Get("internal/users/:userId")
+  @UseGuards(InternalApiGuard)
+  async getUserById(@Param("userId") userId: string) {
+    return this.authService.getUserById(userId);
   }
 }

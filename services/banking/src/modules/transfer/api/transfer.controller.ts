@@ -17,7 +17,7 @@ export class TransferController {
     return await this.transferService.createTransfer(
       idempotencyKey,
       request.user.userId,
-      body.destinationAccountId,
+      body.destinationUserId,
       body.amount
     );
   }

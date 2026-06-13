@@ -37,7 +37,11 @@ services:
       PORT: 8080
       ZONE: local-zone-banking
       NODE_ID: banking-service-local-1
+      AUTH_SERVICE_URL: http://authentication-service:8080
       AUTH_INTERNAL_API_KEY: local-internal-api-key
+      AUTH_CLIENT_TIMEOUT_MS: 1500
+      AUTH_CLIENT_MAX_RETRIES: 2
+      AUTH_CLIENT_RETRY_BACKOFF_MS: 200
     volumes:
       - ../../:/workspace
     depends_on:
@@ -55,7 +59,14 @@ services:
       PORT: 8080
       ZONE: local-zone-observability
       NODE_ID: observability-service-local-1
+      AUTH_SERVICE_URL: http://authentication-service:8080
       AUTH_INTERNAL_API_KEY: local-internal-api-key
+      AUTH_CLIENT_TIMEOUT_MS: 1500
+      AUTH_CLIENT_MAX_RETRIES: 2
+      AUTH_CLIENT_RETRY_BACKOFF_MS: 200
+      OBS_NODE_HEALTH_TIMEOUT_MS: 1200
+      OBS_NODE_HEALTH_MAX_RETRIES: 1
+      OBS_NODE_HEALTH_RETRY_BACKOFF_MS: 200
     volumes:
       - ../../:/workspace
     deploy:

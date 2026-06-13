@@ -25,14 +25,8 @@ export class BalanceService {
       .map((user) => ({
         userId: user.userId,
         username: user.username,
-        email: user.email,
-        accountId: ""
+        email: user.email
       }));
-
-    for (const recipient of recipients) {
-      const account = await this.accountRepository.ensureAccountForUser(recipient.userId);
-      recipient.accountId = account.accountId;
-    }
 
     return {
       recipients

@@ -7,7 +7,7 @@ import {
 import { PageShell } from "../components/PageShell";
 
 export function TransferPage() {
-  const [destinationAccountId, setDestinationAccountId] = useState("");
+  const [destinationUserId, setDestinationUserId] = useState("");
   const [amount, setAmount] = useState("");
   const [recipients, setRecipients] = useState<TransferRecipient[]>([]);
   const [loadingRecipients, setLoadingRecipients] = useState(true);
@@ -31,7 +31,7 @@ export function TransferPage() {
         );
         setRecipients(filteredRecipients);
         if (filteredRecipients.length > 0) {
-          setDestinationAccountId(filteredRecipients[0].accountId);
+          setDestinationUserId(filteredRecipients[0].userId);
         }
       })
       .catch(() => setError("Unable to load recipients."))
@@ -49,7 +49,7 @@ export function TransferPage() {
       setError("No recipients available. Register another user first.");
       return;
     }
-    if (!destinationAccountId) {
+    if (!destinationUserId) {
       setError("Please select a recipient.");
       return;
     }
@@ -65,7 +65,7 @@ export function TransferPage() {
     setMessage(null);
     try {
       await createTransfer(token, idempotencyKey, {
-        destinationAccountId,
+        destinationUserId,
         amount: parsedAmount
       });
       setMessage("Transfer submitted");
@@ -91,15 +91,15 @@ export function TransferPage() {
           <select
             id="destination"
             className="input"
-            value={destinationAccountId}
-            onChange={(e) => setDestinationAccountId(e.target.value)}
+            value={destinationUserId}
+            onChange={(e) => setDestinationUserId(e.target.value)}
             disabled={loadingRecipients || recipients.length === 0}
           >
             {recipients.length === 0 ? (
               <option value="">No recipients available</option>
             ) : (
               recipients.map((recipient) => (
-                <option key={recipient.accountId} value={recipient.accountId}>
+                <option key={recipient.userId} value={recipient.userId}>
                   @{recipient.username}
                 </option>
               ))
@@ -126,7 +126,7 @@ export function TransferPage() {
           disabled={
             loadingRecipients ||
             recipients.length === 0 ||
-            !destinationAccountId ||
+            !destinationUserId ||
             !Number.isFinite(Number(amount)) ||
             Number(amount) < 0.01
           }

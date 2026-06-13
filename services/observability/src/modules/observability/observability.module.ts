@@ -9,6 +9,6 @@ import { AuthClientModule } from "../auth-client/auth-client.module";
   imports: [AuthClientModule],
   controllers: [ObservabilityController],
   providers: [ObservabilityService, NodeHealthRepository, RecoveryLogService],
-  exports: [RecoveryLogService]
+  exports: [ObservabilityService, RecoveryLogService]
 })
 export class ObservabilityModule {}

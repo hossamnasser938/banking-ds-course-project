@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import * as crypto from "node:crypto";
 import { IdempotencyRecordEntity } from "../domain/idempotency-record.entity";
 import { IdempotencyRepository } from "../infrastructure/idempotency.repository";
 import { TransferPolicyService } from "../domain/transfer-policy.service";
 import { TransferRepository } from "../infrastructure/transfer.repository";
 import { AccountRepository } from "../../ledger/infrastructure/account.repository";
+import { AuthClientService } from "../../auth-client/application/auth-client.service";
 
 @Injectable()
 export class TransferService {
@@ -12,19 +13,20 @@ export class TransferService {
     private readonly transferRepository: TransferRepository,
     private readonly idempotencyRepository: IdempotencyRepository,
     private readonly transferPolicyService: TransferPolicyService,
-    private readonly accountRepository: AccountRepository
+    private readonly accountRepository: AccountRepository,
+    private readonly authClientService: AuthClientService
   ) {}
 
   createTransfer(
     idempotencyKey: string,
     sourceUserId: string,
-    destinationAccountId: string,
+    destinationUserId: string,
     amount: number
   ): Promise<Record<string, unknown>> {
     return this.createTransferInternal(
       idempotencyKey,
       sourceUserId,
-      destinationAccountId,
+      destinationUserId,
       amount
     );
   }
@@ -32,13 +34,22 @@ export class TransferService {
   private async createTransferInternal(
     idempotencyKey: string,
     sourceUserId: string,
-    destinationAccountId: string,
+    destinationUserId: string,
     amount: number
   ): Promise<Record<string, unknown>> {
     const sourceAccount = await this.accountRepository.ensureAccountForUser(sourceUserId);
+    const destinationUser = await this.authClientService.getUserById(destinationUserId);
+    if (!destinationUser || destinationUser.role !== "user") {
+      throw new NotFoundException("Destination user not found");
+    }
+    if (destinationUser.userId === sourceUserId) {
+      throw new BadRequestException("Cannot transfer to the same user");
+    }
+    const destinationAccount = await this.accountRepository.ensureAccountForUser(destinationUser.userId);
+
     const payloadHash = this.hashPayload({
       sourceAccountId: sourceAccount.accountId,
-      destinationAccountId,
+      destinationUserId: destinationUser.userId,
       amount
     });
 
@@ -47,16 +58,16 @@ export class TransferService {
       return existing.responseSnapshot;
     }
 
-    this.transferPolicyService.validate(destinationAccountId, amount);
-    await this.accountRepository.transferBetweenAccounts(
+    this.transferPolicyService.validate(destinationUser.userId, amount);
+    const transferred = await this.accountRepository.transferBetweenAccounts(
       sourceUserId,
-      destinationAccountId,
+      destinationUser.userId,
       amount
     );
     const transfer = await this.transferRepository.create({
       idempotencyKey,
-      sourceAccountId: sourceAccount.accountId,
-      destinationAccountId,
+      sourceAccountId: transferred.sourceAccountId,
+      destinationAccountId: transferred.destinationAccountId,
       amount
     });
 
@@ -64,8 +75,8 @@ export class TransferService {
     const response = {
       transferId: transfer.transferId,
       status: transfer.status,
-      sourceAccountId: sourceAccount.accountId,
-      destinationAccountId,
+      sourceAccountId: transferred.sourceAccountId,
+      destinationAccountId: transferred.destinationAccountId,
       amount,
       message: "Transfer committed"
     };

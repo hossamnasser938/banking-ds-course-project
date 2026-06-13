@@ -35,14 +35,19 @@ export class AccountRepository {
 
   async transferBetweenAccounts(
     sourceUserId: string,
-    destinationAccountId: string,
+    destinationUserId: string,
     amount: number
-  ): Promise<void> {
+  ): Promise<{ sourceAccountId: string; destinationAccountId: string }> {
+    if (sourceUserId === destinationUserId) {
+      throw new BadRequestException("Cannot transfer to the same user");
+    }
+
     const sourceAccount = await this.ensureAccountForUser(sourceUserId);
+    const destinationAccount = await this.ensureAccountForUser(destinationUserId);
 
     await this.db.transaction(async (client) => {
       const source = await this.findAccountByAccountId(sourceAccount.accountId, client);
-      const destination = await this.findAccountByAccountId(destinationAccountId, client);
+      const destination = await this.findAccountByAccountId(destinationAccount.accountId, client);
 
       if (destination === null) {
         throw new NotFoundException("Destination account not found");
@@ -70,6 +75,11 @@ export class AccountRepository {
         [amount, destination.accountId]
       );
     });
+
+    return {
+      sourceAccountId: sourceAccount.accountId,
+      destinationAccountId: destinationAccount.accountId
+    };
   }
 
   private async findAccountByUserId(userId: string): Promise<Account | null> {
