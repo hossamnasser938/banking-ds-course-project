@@ -11,11 +11,16 @@ export type AuthenticatedUser = {
 export class AuthClientService {
   private readonly authServiceUrl =
     process.env.AUTH_SERVICE_URL ?? "http://authentication-service:8080";
+  private readonly internalApiKey =
+    process.env.AUTH_INTERNAL_API_KEY ?? "dev-internal-api-key";
 
   async verifyToken(token: string): Promise<AuthenticatedUser> {
     const response = await fetch(`${this.authServiceUrl}/auth/internal/verify`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-api-key": this.internalApiKey
+      },
       body: JSON.stringify({ token })
     });
 

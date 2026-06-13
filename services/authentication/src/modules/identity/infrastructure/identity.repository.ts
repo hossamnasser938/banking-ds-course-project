@@ -1,58 +1,118 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import * as crypto from "node:crypto";
+import {
+  DATABASE_CLIENT,
+  DatabaseClient
+} from "../../../infrastructure/database/database.providers";
 import { UserEntity, UserRole } from "../domain/user.entity";
 
 @Injectable()
 export class IdentityRepository {
-  private readonly usersByUsername = new Map<string, UserEntity>();
-  private readonly usersByEmail = new Map<string, UserEntity>();
+  constructor(@Inject(DATABASE_CLIENT) private readonly db: DatabaseClient) {}
 
-  createUser(
+  async createUser(
     username: string,
     email: string,
     password: string,
     role: UserRole = "user"
-  ): UserEntity {
-    const user = new UserEntity(
-      crypto.randomUUID(),
-      username,
-      email,
-      `hash:${password}`,
-      role
+  ): Promise<UserEntity> {
+    const userId = crypto.randomUUID();
+    const createdAt = new Date();
+    const passwordHash = `hash:${password}`;
+
+    await this.db.query(
+      `INSERT INTO users (user_id, username, email, password_hash, role, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [userId, username, email, passwordHash, role, createdAt]
     );
-    this.usersByUsername.set(username, user);
-    this.usersByEmail.set(email, user);
-    return user;
+
+    return new UserEntity(userId, username, email, passwordHash, role, createdAt);
   }
 
-  findByUsername(username: string): UserEntity | undefined {
-    return this.usersByUsername.get(username);
-  }
-
-  findByEmail(email: string): UserEntity | undefined {
-    return this.usersByEmail.get(email);
-  }
-
-  findByUserId(userId: string): UserEntity | undefined {
-    for (const user of this.usersByEmail.values()) {
-      if (user.userId === userId) {
-        return user;
-      }
+  async findByUsername(username: string): Promise<UserEntity | undefined> {
+    const result = await this.db.query(
+      `SELECT user_id, username, email, password_hash, role, created_at
+       FROM users
+       WHERE username = $1`,
+      [username]
+    );
+    if (result.rowCount === 0) {
+      return undefined;
     }
-    return undefined;
+    return this.mapRowToUser(result.rows[0] as UserRow);
   }
 
-  listUsers(): UserEntity[] {
-    return Array.from(this.usersByEmail.values());
+  async findByEmail(email: string): Promise<UserEntity | undefined> {
+    const result = await this.db.query(
+      `SELECT user_id, username, email, password_hash, role, created_at
+       FROM users
+       WHERE email = $1`,
+      [email]
+    );
+    if (result.rowCount === 0) {
+      return undefined;
+    }
+    return this.mapRowToUser(result.rows[0] as UserRow);
   }
 
-  hasAnyUsers(): boolean {
-    return this.usersByEmail.size > 0;
+  async findByUserId(userId: string): Promise<UserEntity | undefined> {
+    const result = await this.db.query(
+      `SELECT user_id, username, email, password_hash, role, created_at
+       FROM users
+       WHERE user_id = $1`,
+      [userId]
+    );
+    if (result.rowCount === 0) {
+      return undefined;
+    }
+    return this.mapRowToUser(result.rows[0] as UserRow);
   }
 
-  validateCredentials(email: string, password: string): UserEntity | undefined {
-    const user = this.findByEmail(email);
-    if (!user) return undefined;
+  async listUsers(): Promise<UserEntity[]> {
+    const result = await this.db.query(
+      `SELECT user_id, username, email, password_hash, role, created_at
+       FROM users
+       ORDER BY created_at ASC`
+    );
+    return result.rows.map((row) => this.mapRowToUser(row as UserRow));
+  }
+
+  async hasAnyUsers(): Promise<boolean> {
+    const result = await this.db.query("SELECT COUNT(*)::int AS total FROM users");
+    return Number((result.rows[0] as { total: number }).total) > 0;
+  }
+
+  async validateCredentials(email: string, password: string): Promise<UserEntity | undefined> {
+    const result = await this.db.query(
+      `SELECT user_id, username, email, password_hash, role, created_at
+       FROM users
+       WHERE email = $1`,
+      [email]
+    );
+    if (result.rowCount === 0) {
+      return undefined;
+    }
+    const user = this.mapRowToUser(result.rows[0] as UserRow);
     return user.passwordHash === `hash:${password}` ? user : undefined;
   }
+
+  private mapRowToUser(row: UserRow): UserEntity {
+    return new UserEntity(
+      row.user_id,
+      row.username,
+      row.email,
+      row.password_hash,
+      row.role,
+      new Date(row.created_at)
+    );
+  }
 }
+
+type UserRow = {
+  user_id: string;
+  username: string;
+  email: string;
+  password_hash: string;
+  role: UserRole;
+  created_at: Date | string;
+};

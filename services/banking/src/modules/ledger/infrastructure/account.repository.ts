@@ -1,44 +1,105 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import * as crypto from "node:crypto";
+import {
+  DATABASE_CLIENT,
+  DatabaseClient,
+  TransactionClient
+} from "../../../infrastructure/database/database.providers";
 
 type Account = { accountId: string; balance: number };
 
 @Injectable()
 export class AccountRepository {
-  private readonly accountByUser = new Map<string, Account>();
-  private readonly userIdByAccountId = new Map<string, string>();
+  constructor(@Inject(DATABASE_CLIENT) private readonly db: DatabaseClient) {}
 
-  ensureAccountForUser(userId: string): Account {
-    const existing = this.accountByUser.get(userId);
-    if (existing) {
+  async ensureAccountForUser(userId: string): Promise<Account> {
+    const existing = await this.findAccountByUserId(userId);
+    if (existing !== null) {
       return existing;
     }
-    const account = { accountId: crypto.randomUUID(), balance: 100 };
-    this.accountByUser.set(userId, account);
-    this.userIdByAccountId.set(account.accountId, userId);
-    return account;
+
+    const accountId = crypto.randomUUID();
+    await this.db.query(
+      `INSERT INTO accounts (account_id, user_id, balance, currency, updated_at)
+       VALUES ($1, $2, 100, 'USD', NOW())
+       ON CONFLICT (user_id) DO NOTHING`,
+      [accountId, userId]
+    );
+
+    const created = await this.findAccountByUserId(userId);
+    if (created === null) {
+      throw new NotFoundException("Unable to provision account");
+    }
+    return created;
   }
 
-  transferBetweenAccounts(sourceUserId: string, destinationAccountId: string, amount: number): void {
-    const sourceAccount = this.ensureAccountForUser(sourceUserId);
+  async transferBetweenAccounts(
+    sourceUserId: string,
+    destinationAccountId: string,
+    amount: number
+  ): Promise<void> {
+    const sourceAccount = await this.ensureAccountForUser(sourceUserId);
 
-    const destinationUserId = this.userIdByAccountId.get(destinationAccountId);
-    if (!destinationUserId) {
-      throw new NotFoundException("Destination account not found");
-    }
-    if (destinationUserId === sourceUserId) {
-      throw new BadRequestException("Cannot transfer to the same account");
-    }
+    await this.db.transaction(async (client) => {
+      const source = await this.findAccountByAccountId(sourceAccount.accountId, client);
+      const destination = await this.findAccountByAccountId(destinationAccountId, client);
 
-    const destinationAccount = this.accountByUser.get(destinationUserId);
-    if (!destinationAccount) {
-      throw new NotFoundException("Destination account not found");
-    }
-    if (sourceAccount.balance < amount) {
-      throw new BadRequestException("Insufficient balance");
-    }
+      if (destination === null) {
+        throw new NotFoundException("Destination account not found");
+      }
+      if (source === null) {
+        throw new NotFoundException("Source account not found");
+      }
+      if (destination.accountId === source.accountId) {
+        throw new BadRequestException("Cannot transfer to the same account");
+      }
+      if (source.balance < amount) {
+        throw new BadRequestException("Insufficient balance");
+      }
 
-    sourceAccount.balance -= amount;
-    destinationAccount.balance += amount;
+      await client.query(
+        `UPDATE accounts
+         SET balance = balance - $1, updated_at = NOW()
+         WHERE account_id = $2`,
+        [amount, source.accountId]
+      );
+      await client.query(
+        `UPDATE accounts
+         SET balance = balance + $1, updated_at = NOW()
+         WHERE account_id = $2`,
+        [amount, destination.accountId]
+      );
+    });
+  }
+
+  private async findAccountByUserId(userId: string): Promise<Account | null> {
+    const result = await this.db.query(
+      "SELECT account_id, balance FROM accounts WHERE user_id = $1",
+      [userId]
+    );
+    if (result.rowCount === 0) {
+      return null;
+    }
+    return {
+      accountId: result.rows[0].account_id as string,
+      balance: Number(result.rows[0].balance)
+    };
+  }
+
+  private async findAccountByAccountId(
+    accountId: string,
+    client: TransactionClient
+  ): Promise<Account | null> {
+    const result = await client.query(
+      "SELECT account_id, balance FROM accounts WHERE account_id = $1 FOR UPDATE",
+      [accountId]
+    );
+    if (result.rowCount === 0) {
+      return null;
+    }
+    return {
+      accountId: result.rows[0].account_id as string,
+      balance: Number(result.rows[0].balance)
+    };
   }
 }

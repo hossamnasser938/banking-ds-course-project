@@ -42,3 +42,22 @@ Examples:
 docker compose -f infra/docker/docker-compose.local.yml down
 docker compose -f infra/docker/docker-compose.local-ha.yml down
 ```
+
+## Database UI (pgAdmin)
+
+pgAdmin is included in both local modes and is available at:
+
+- [http://localhost:5050](http://localhost:5050)
+
+Sign in to pgAdmin with:
+
+- Email: `admin@banking.com`
+- Password: `admin123`
+
+Then create a new server connection in pgAdmin using:
+
+- Host: `postgres-primary`
+- Port: `5432`
+- Username: `postgres`
+- Password: `postgres`
+- Database: `banking`

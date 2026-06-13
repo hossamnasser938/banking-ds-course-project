@@ -8,10 +8,10 @@ export class BalanceController {
 
   @UseGuards(JwtAuthGuard)
   @Get("me/balance")
-  getMyBalance(
+  async getMyBalance(
     @Req() request: { user: { userId: string; role: "user" | "admin" } }
   ) {
-    return this.balanceService.getBalanceByUserId(request.user.userId);
+    return await this.balanceService.getBalanceByUserId(request.user.userId);
   }
 
   @UseGuards(JwtAuthGuard)

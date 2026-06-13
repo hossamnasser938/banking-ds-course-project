@@ -20,27 +20,40 @@ export class TransferService {
     sourceUserId: string,
     destinationAccountId: string,
     amount: number
-  ) {
-    const sourceAccount = this.accountRepository.ensureAccountForUser(sourceUserId);
+  ): Promise<Record<string, unknown>> {
+    return this.createTransferInternal(
+      idempotencyKey,
+      sourceUserId,
+      destinationAccountId,
+      amount
+    );
+  }
 
+  private async createTransferInternal(
+    idempotencyKey: string,
+    sourceUserId: string,
+    destinationAccountId: string,
+    amount: number
+  ): Promise<Record<string, unknown>> {
+    const sourceAccount = await this.accountRepository.ensureAccountForUser(sourceUserId);
     const payloadHash = this.hashPayload({
       sourceAccountId: sourceAccount.accountId,
       destinationAccountId,
       amount
     });
 
-    const existing = this.idempotencyRepository.find(idempotencyKey);
+    const existing = await this.idempotencyRepository.find(idempotencyKey);
     if (existing) {
       return existing.responseSnapshot;
     }
 
     this.transferPolicyService.validate(destinationAccountId, amount);
-    this.accountRepository.transferBetweenAccounts(
+    await this.accountRepository.transferBetweenAccounts(
       sourceUserId,
       destinationAccountId,
       amount
     );
-    const transfer = this.transferRepository.create({
+    const transfer = await this.transferRepository.create({
       idempotencyKey,
       sourceAccountId: sourceAccount.accountId,
       destinationAccountId,
@@ -57,7 +70,7 @@ export class TransferService {
       message: "Transfer committed"
     };
 
-    this.idempotencyRepository.save(
+    await this.idempotencyRepository.save(
       new IdempotencyRecordEntity(
         idempotencyKey,
         payloadHash,

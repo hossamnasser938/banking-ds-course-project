@@ -9,8 +9,8 @@ export class BalanceService {
     private readonly authClientService: AuthClientService
   ) {}
 
-  getBalanceByUserId(userId: string) {
-    const account = this.accountRepository.ensureAccountForUser(userId);
+  async getBalanceByUserId(userId: string) {
+    const account = await this.accountRepository.ensureAccountForUser(userId);
     return {
       accountId: account.accountId,
       balance: account.balance,
@@ -26,8 +26,13 @@ export class BalanceService {
         userId: user.userId,
         username: user.username,
         email: user.email,
-        accountId: this.accountRepository.ensureAccountForUser(user.userId).accountId
+        accountId: ""
       }));
+
+    for (const recipient of recipients) {
+      const account = await this.accountRepository.ensureAccountForUser(recipient.userId);
+      recipient.accountId = account.accountId;
+    }
 
     return {
       recipients

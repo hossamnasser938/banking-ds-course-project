@@ -16,18 +16,21 @@ async function bootstrap() {
   });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useGlobalInterceptors(new ResponseMetadataInterceptor());
-  seedDefaultAdminIfRequired(app, logger);
+  await seedDefaultAdminIfRequired(app, logger);
   const port = Number(process.env.PORT ?? 8080);
   await app.listen(port);
 }
 
-function seedDefaultAdminIfRequired(app: INestApplication, logger: Logger): void {
+async function seedDefaultAdminIfRequired(
+  app: INestApplication,
+  logger: Logger
+): Promise<void> {
   const authService = app.get(AuthService, { strict: false });
   if (!authService) {
     return;
   }
 
-  const defaultAdminCreated = authService.seedDefaultAdminIfEmpty();
+  const defaultAdminCreated = await authService.seedDefaultAdminIfEmpty();
   if (defaultAdminCreated) {
     logger.log("Default admin account was created.");
   }

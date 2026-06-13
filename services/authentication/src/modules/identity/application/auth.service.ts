@@ -15,19 +15,33 @@ export class AuthService {
 
   constructor(private readonly identityRepository: IdentityRepository) {}
 
-  register(dto: RegisterDto) {
-    if (this.identityRepository.findByUsername(dto.username)) {
+  async register(dto: RegisterDto) {
+    if (await this.identityRepository.findByUsername(dto.username)) {
       throw new ConflictException("Username already exists");
     }
-    if (this.identityRepository.findByEmail(dto.email)) {
+    if (await this.identityRepository.findByEmail(dto.email)) {
       throw new ConflictException("Email already exists");
     }
-    const user = this.identityRepository.createUser(
-      dto.username,
-      dto.email,
-      dto.password,
-      dto.role ?? "user"
-    );
+    let user;
+    try {
+      user = await this.identityRepository.createUser(
+        dto.username,
+        dto.email,
+        dto.password,
+        dto.role ?? "user"
+      );
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: string }).code === "23505"
+      ) {
+        throw new ConflictException("Username or email already exists");
+      }
+      throw error;
+    }
+
     return {
       accessToken: this.issueToken(user.userId, user.role),
       userId: user.userId,
@@ -36,8 +50,8 @@ export class AuthService {
     };
   }
 
-  login(dto: LoginDto) {
-    const user = this.identityRepository.validateCredentials(dto.email, dto.password);
+  async login(dto: LoginDto) {
+    const user = await this.identityRepository.validateCredentials(dto.email, dto.password);
     if (!user) {
       throw new UnauthorizedException("Invalid credentials");
     }
@@ -49,19 +63,31 @@ export class AuthService {
     };
   }
 
-  seedDefaultAdminIfEmpty(): boolean {
-    if (this.identityRepository.hasAnyUsers()) {
+  async seedDefaultAdminIfEmpty(): Promise<boolean> {
+    if (await this.identityRepository.hasAnyUsers()) {
       return false;
     }
 
     const defaults = AuthService.DEFAULT_ADMIN;
-    this.identityRepository.createUser(
-      defaults.username,
-      defaults.email,
-      defaults.password,
-      defaults.role
-    );
-    return true;
+    try {
+      await this.identityRepository.createUser(
+        defaults.username,
+        defaults.email,
+        defaults.password,
+        defaults.role
+      );
+      return true;
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: string }).code === "23505"
+      ) {
+        return false;
+      }
+      throw error;
+    }
   }
 
   verifyToken(token: string): { userId: string; role: "user" | "admin" } {
@@ -69,14 +95,14 @@ export class AuthService {
     return { userId: parsed.sub, role: parsed.role };
   }
 
-  verifyTokenWithIdentity(token: string): {
+  async verifyTokenWithIdentity(token: string): Promise<{
     userId: string;
     username: string;
     email: string;
     role: "user" | "admin";
-  } {
+  }> {
     const parsed = this.parseToken(token);
-    const user = this.identityRepository.findByUserId(parsed.sub);
+    const user = await this.identityRepository.findByUserId(parsed.sub);
     if (!user) {
       throw new UnauthorizedException("Unknown user");
     }
@@ -88,9 +114,10 @@ export class AuthService {
     };
   }
 
-  listUsers() {
+  async listUsers() {
+    const users = await this.identityRepository.listUsers();
     return {
-      users: this.identityRepository.listUsers().map((user) => ({
+      users: users.map((user) => ({
         userId: user.userId,
         username: user.username,
         email: user.email,

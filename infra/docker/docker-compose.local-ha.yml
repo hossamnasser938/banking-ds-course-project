@@ -19,8 +19,11 @@ services:
       PORT: 8080
       ZONE: local-zone-auth
       NODE_ID: authentication-service-local-1
+      AUTH_INTERNAL_API_KEY: local-internal-api-key
     volumes:
       - ../../:/workspace
+    depends_on:
+      - postgres-primary
 
   banking-load-balancer:
     image: nginx:1.27
@@ -39,6 +42,7 @@ services:
       ZONE: local-zone-banking-a
       NODE_ID: banking-service-local-a
       AUTH_SERVICE_URL: http://authentication-service:8080
+      AUTH_INTERNAL_API_KEY: local-internal-api-key
     volumes:
       - ../../:/workspace
     depends_on:
@@ -53,6 +57,7 @@ services:
       ZONE: local-zone-banking-b
       NODE_ID: banking-service-local-b
       AUTH_SERVICE_URL: http://authentication-service:8080
+      AUTH_INTERNAL_API_KEY: local-internal-api-key
     volumes:
       - ../../:/workspace
     depends_on:
@@ -69,6 +74,7 @@ services:
       ZONE: local-zone-observability
       NODE_ID: observability-service-local-1
       AUTH_SERVICE_URL: http://authentication-service:8080
+      AUTH_INTERNAL_API_KEY: local-internal-api-key
       OBSERVED_NODES_JSON: >-
         [{"nodeId":"banking-service-local-a","componentType":"banking-api","zone":"local-zone-banking-a","url":"http://banking-service-a:8080"},{"nodeId":"banking-service-local-b","componentType":"banking-api","zone":"local-zone-banking-b","url":"http://banking-service-b:8080"}]
     volumes:
@@ -96,5 +102,18 @@ services:
     volumes:
       - postgres_primary_data:/var/lib/postgresql/data
 
+  pgadmin:
+    image: dpage/pgadmin4:8
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@banking.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    depends_on:
+      - postgres-primary
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
 volumes:
   postgres_primary_data:
+  pgadmin_data:

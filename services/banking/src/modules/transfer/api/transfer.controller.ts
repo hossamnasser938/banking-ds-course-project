@@ -9,12 +9,12 @@ export class TransferController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  createTransfer(
+  async createTransfer(
     @Headers("idempotency-key") idempotencyKey: string,
     @Req() request: { user: { userId: string } },
     @Body() body: CreateTransferDto
   ) {
-    return this.transferService.createTransfer(
+    return await this.transferService.createTransfer(
       idempotencyKey,
       request.user.userId,
       body.destinationAccountId,
