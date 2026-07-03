@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - services/observability/Dockerfile
+      - -t
+      - gcr.io/$PROJECT_ID/banking-observability:latest
+      - .
+images:
+  - gcr.io/$PROJECT_ID/banking-observability:latest

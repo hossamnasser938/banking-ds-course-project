@@ -123,3 +123,6 @@ infra/scripts/deploy-gcp.sh
   - `/accounts/*` and `/transfers*` -> banking services/LB target
   - `/admin/nodes/*` -> observability service
   - `/` -> UI service
+- Option B (recommended): use one banking Cloud Run service with two tagged revisions (`a`, `b`) and let admin routing controls change Cloud Run traffic split.
+- Admin observability routing controls (`/admin/nodes/routing`) require the observability Cloud Run service account to have permissions to update Cloud Run services traffic:
+  - `roles/run.admin` (or a custom role with `run.services.get` and `run.services.update`)

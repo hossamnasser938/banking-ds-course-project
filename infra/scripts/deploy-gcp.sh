@@ -27,6 +27,7 @@ SERVICE_PREFIX="${SERVICE_PREFIX:-banking}"
 AUTH_SERVICE_NAME="${AUTH_SERVICE_NAME:-${SERVICE_PREFIX}-auth}"
 BANKING_A_SERVICE_NAME="${BANKING_A_SERVICE_NAME:-${SERVICE_PREFIX}-banking-a}"
 BANKING_B_SERVICE_NAME="${BANKING_B_SERVICE_NAME:-${SERVICE_PREFIX}-banking-b}"
+BANKING_ROUTED_SERVICE_NAME="${BANKING_ROUTED_SERVICE_NAME:-${SERVICE_PREFIX}-banking}"
 OBS_SERVICE_NAME="${OBS_SERVICE_NAME:-${SERVICE_PREFIX}-observability}"
 UI_SERVICE_NAME="${UI_SERVICE_NAME:-${SERVICE_PREFIX}-ui}"
 
@@ -177,6 +178,61 @@ BANKING_B_URL="$(
     --format='value(status.url)'
 )"
 
+echo "[deploy-gcp] Deploying unified banking service with revision tags..."
+gcloud run deploy "${BANKING_ROUTED_SERVICE_NAME}" \
+  --project "${PROJECT_ID}" \
+  --region "${REGION}" \
+  --platform managed \
+  --allow-unauthenticated \
+  --port 8080 \
+  --image "${BANKING_IMAGE}" \
+  ${cloudsql_flags} \
+  --env-vars-file "${banking_a_env_file}"
+
+BANKING_REV_A="$(
+  gcloud run revisions list \
+    --project "${PROJECT_ID}" \
+    --region "${REGION}" \
+    --service "${BANKING_ROUTED_SERVICE_NAME}" \
+    --sort-by='~metadata.creationTimestamp' \
+    --limit=1 \
+    --format='value(metadata.name)'
+)"
+
+gcloud run deploy "${BANKING_ROUTED_SERVICE_NAME}" \
+  --project "${PROJECT_ID}" \
+  --region "${REGION}" \
+  --platform managed \
+  --allow-unauthenticated \
+  --port 8080 \
+  --image "${BANKING_IMAGE}" \
+  ${cloudsql_flags} \
+  --env-vars-file "${banking_b_env_file}" \
+  --no-traffic
+
+BANKING_REV_B="$(
+  gcloud run revisions list \
+    --project "${PROJECT_ID}" \
+    --region "${REGION}" \
+    --service "${BANKING_ROUTED_SERVICE_NAME}" \
+    --sort-by='~metadata.creationTimestamp' \
+    --limit=1 \
+    --format='value(metadata.name)'
+)"
+
+gcloud run services update-traffic "${BANKING_ROUTED_SERVICE_NAME}" \
+  --project "${PROJECT_ID}" \
+  --region "${REGION}" \
+  --to-revisions "${BANKING_REV_A}=50,${BANKING_REV_B}=50" \
+  --set-tags "tag-a=${BANKING_REV_A},tag-b=${BANKING_REV_B}"
+
+BANKING_ROUTED_URL="$(
+  gcloud run services describe "${BANKING_ROUTED_SERVICE_NAME}" \
+    --project "${PROJECT_ID}" \
+    --region "${REGION}" \
+    --format='value(status.url)'
+)"
+
 observed_services_json="$(cat <<EOF
 [{"serviceName":"${BANKING_A_SERVICE_NAME}","componentType":"banking-api","zone":"zone-a","url":"${BANKING_A_URL}"},{"serviceName":"${BANKING_B_SERVICE_NAME}","componentType":"banking-api","zone":"zone-b","url":"${BANKING_B_URL}"}]
 EOF
@@ -186,6 +242,12 @@ append_env "${obs_env_file}" "NODE_ID" "observability-service-1"
 append_env "${obs_env_file}" "ZONE" "shared-zone"
 append_env "${obs_env_file}" "AUTH_SERVICE_URL" "${AUTH_SERVICE_URL}"
 append_env "${obs_env_file}" "AUTH_INTERNAL_API_KEY" "${AUTH_INTERNAL_API_KEY}"
+append_env "${obs_env_file}" "GCP_PROJECT_ID" "${PROJECT_ID}"
+append_env "${obs_env_file}" "GCP_REGION" "${REGION}"
+append_env "${obs_env_file}" "BANKING_CLOUD_RUN_SERVICE" "${BANKING_ROUTED_SERVICE_NAME}"
+append_env "${obs_env_file}" "BANKING_TRAFFIC_TAG_A" "tag-a"
+append_env "${obs_env_file}" "BANKING_TRAFFIC_TAG_B" "tag-b"
+append_env "${obs_env_file}" "ROUTING_PROPAGATION_WAIT_MS" "90000"
 append_env "${obs_env_file}" "AUTH_CLIENT_TIMEOUT_MS" "1500"
 append_env "${obs_env_file}" "AUTH_CLIENT_MAX_RETRIES" "2"
 append_env "${obs_env_file}" "AUTH_CLIENT_RETRY_BACKOFF_MS" "200"
@@ -216,7 +278,7 @@ OBS_URL="$(
 )"
 
 append_env "${ui_env_file}" "AUTH_SERVICE_URL" "${AUTH_SERVICE_URL}"
-append_env "${ui_env_file}" "BANKING_SERVICE_URL" "${BANKING_A_URL}"
+append_env "${ui_env_file}" "BANKING_SERVICE_URL" "${BANKING_ROUTED_URL}"
 append_env "${ui_env_file}" "OBS_SERVICE_URL" "${OBS_URL}"
 
 echo "[deploy-gcp] Deploying UI service..."
@@ -241,6 +303,7 @@ echo "[deploy-gcp] Deployment complete."
 echo "  Auth URL:          ${AUTH_SERVICE_URL}"
 echo "  Banking A URL:     ${BANKING_A_URL}"
 echo "  Banking B URL:     ${BANKING_B_URL}"
+echo "  Banking Routed URL:${BANKING_ROUTED_URL}"
 echo "  Observability URL: ${OBS_URL}"
 echo "  UI URL:            ${UI_URL}"
 echo

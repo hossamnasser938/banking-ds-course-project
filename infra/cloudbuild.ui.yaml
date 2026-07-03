@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - services/ui/Dockerfile
+      - -t
+      - gcr.io/$PROJECT_ID/banking-ui:latest
+      - .
+images:
+  - gcr.io/$PROJECT_ID/banking-ui:latest
