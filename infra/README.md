@@ -2,6 +2,10 @@
 
 This folder contains Docker and environment setup for running the project in different modes.
 
+For Cloud Run deployment guidance, see:
+
+- `infra/CLOUD_RUN_DEPLOYMENT.md`
+
 ## Compose Files
 
 - `docker/docker-compose.local.yml`
@@ -57,6 +61,19 @@ Observed node health probing (observability service) uses:
 - `OBS_NODE_HEALTH_MAX_RETRIES=1`
 - `OBS_NODE_HEALTH_RETRY_BACKOFF_MS=200`
 
+For cloud-friendly service-level observation (instead of static node IDs), set:
+
+- `OBSERVED_SERVICES_JSON`
+  - Example:
+    - `[{"serviceName":"banking-api","componentType":"banking-api","zone":"multi-zone","url":"https://banking-service-url"}]`
+  - Falls back to `OBSERVED_NODES_JSON` when not provided.
+
+For managed Postgres connectivity, database clients support:
+
+- `DB_SOCKET_PATH` (Cloud SQL Unix socket path)
+- `DB_SSL` (`true` or `false`)
+- `DB_SSL_REJECT_UNAUTHORIZED` (`true` or `false`)
+
 ## Database UI (pgAdmin)
 
 pgAdmin is included in both local modes and is available at:
@@ -90,3 +107,11 @@ What it does:
 - Sends repeated `/accounts/me/balance` requests and summarizes serving node distribution.
 - Stops `banking-service-a`, sends more requests, and verifies traffic is no longer routed to that replica.
 - Restarts `banking-service-a` after the test.
+
+## UI API Base URL
+
+UI request base behavior:
+
+- Local dev defaults to `http://localhost:8080`
+- Non-dev defaults to same-origin (empty base URL)
+- Optional override via `VITE_API_BASE_URL`

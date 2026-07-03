@@ -15,6 +15,13 @@ type ObservedNode = {
   url: string;
 };
 
+type ObservedServiceEndpoint = {
+  serviceName: string;
+  url: string;
+  componentType?: string;
+  zone?: string;
+};
+
 @Injectable()
 export class NodeHealthRepository {
   private readonly probeTimeoutMs = Number(process.env.OBS_NODE_HEALTH_TIMEOUT_MS ?? 1200);
@@ -48,6 +55,16 @@ export class NodeHealthRepository {
   }
 
   private getConfiguredObservedNodes(): ObservedNode[] {
+    const serviceEndpoints = this.getConfiguredObservedServices();
+    if (serviceEndpoints.length > 0) {
+      return serviceEndpoints.map((service) => ({
+        nodeId: `service-${service.serviceName}`,
+        componentType: service.componentType ?? "service",
+        zone: service.zone ?? "shared-zone",
+        url: service.url
+      }));
+    }
+
     const raw = process.env.OBSERVED_NODES_JSON;
     if (!raw) {
       return [];
@@ -61,6 +78,20 @@ export class NodeHealthRepository {
           Boolean(node?.zone) &&
           Boolean(node?.url)
       );
+    } catch {
+      return [];
+    }
+  }
+
+  private getConfiguredObservedServices(): ObservedServiceEndpoint[] {
+    const raw = process.env.OBSERVED_SERVICES_JSON;
+    if (!raw) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as ObservedServiceEndpoint[];
+      return parsed.filter((service) => Boolean(service?.serviceName) && Boolean(service?.url));
     } catch {
       return [];
     }

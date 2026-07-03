@@ -13,7 +13,11 @@ WORKDIR /workspace/services/ui
 RUN npm run build
 
 FROM nginx:1.27-alpine
-COPY services/ui/nginx.conf /etc/nginx/conf.d/default.conf
+RUN apk add --no-cache gettext
+COPY services/ui/nginx.conf /etc/nginx/templates/default.conf.template
+COPY services/ui/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 COPY --from=build /workspace/services/ui/dist /usr/share/nginx/html
 
 EXPOSE 80
+CMD ["/docker-entrypoint.sh"]

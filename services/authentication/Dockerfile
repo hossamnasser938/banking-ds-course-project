@@ -26,4 +26,4 @@ RUN npm ci --omit=dev
 COPY --from=build /workspace/services/authentication/dist services/authentication/dist
 
 EXPOSE 8080
-CMD ["node", "services/authentication/dist/main.js"]
+CMD ["node", "services/authentication/dist/src/main.js"]

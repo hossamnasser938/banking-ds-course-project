@@ -7,6 +7,9 @@ coverage/
 *.log
 .env
 .env.*
+infra/env.local.gcp
+infra/env.gcp.base
+infra/env.gcp.region
 .DS_Store
 Thumbs.db
 *.tmp

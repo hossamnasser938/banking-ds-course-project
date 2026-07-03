@@ -1,5 +1,5 @@
 import { Provider } from "@nestjs/common";
-import { Pool, PoolClient, QueryResult } from "pg";
+import { Pool, PoolClient, PoolConfig, QueryResult } from "pg";
 
 export const DATABASE_CLIENT = "DATABASE_CLIENT";
 
@@ -92,13 +92,7 @@ const schemaStatements = [
 ];
 
 async function createDatabaseClient(): Promise<DatabaseClient> {
-  const pool = new Pool({
-    host: process.env.DB_HOST ?? "postgres-primary",
-    port: Number(process.env.DB_PORT ?? 5432),
-    user: process.env.DB_USER ?? "postgres",
-    password: process.env.DB_PASSWORD ?? "postgres",
-    database: process.env.DB_NAME ?? "banking"
-  });
+  const pool = new Pool(createPoolConfig());
 
   pool.on("error", () => {
     // Prevent process termination when DB resets active pooled connections.
@@ -152,3 +146,18 @@ export const databaseProviders: Provider[] = [
     useFactory: createDatabaseClient
   }
 ];
+
+function createPoolConfig(): PoolConfig {
+  const socketPath = process.env.DB_SOCKET_PATH;
+  const sslEnabled = process.env.DB_SSL === "true";
+  const sslRejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false";
+
+  return {
+    host: socketPath ?? process.env.DB_HOST ?? "postgres-primary",
+    port: Number(process.env.DB_PORT ?? 5432),
+    user: process.env.DB_USER ?? "postgres",
+    password: process.env.DB_PASSWORD ?? "postgres",
+    database: process.env.DB_NAME ?? "banking",
+    ssl: sslEnabled ? { rejectUnauthorized: sslRejectUnauthorized } : undefined
+  };
+}

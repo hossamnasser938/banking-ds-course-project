@@ -26,4 +26,4 @@ RUN npm ci --omit=dev
 COPY --from=build /workspace/services/banking/dist services/banking/dist
 
 EXPOSE 8080
-CMD ["node", "services/banking/dist/main.js"]
+CMD ["node", "services/banking/dist/src/main.js"]

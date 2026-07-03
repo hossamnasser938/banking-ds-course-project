@@ -26,4 +26,4 @@ RUN npm ci --omit=dev
 COPY --from=build /workspace/services/observability/dist services/observability/dist
 
 EXPOSE 8080
-CMD ["node", "services/observability/dist/main.js"]
+CMD ["node", "services/observability/dist/src/main.js"]
